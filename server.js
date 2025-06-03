@@ -14,19 +14,25 @@ app.get("/prices", async (req, res) => {
     const response = await fetch(API_URL, {
       method: "GET",
       headers: {
-  "FPDAPI-SubscriberToken": "90fb2504-6e01-4528-9640-b0f37265e749",
-  "Content-Type": "application/json"
-}
+        "FPDAPI-SubscriberToken": "90fb2504-6e01-4528-9640-b0f37265e749",
+        "Content-Type": "application/json"
+      }
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("❌ API returned non-200 response:", text);
+      return res.status(500).json({ error: "External API error", details: text });
+    }
 
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("❌ API fetch failed:", err.message);
+    console.error("❌ Failed to fetch prices from API:", err);
     res.status(500).json({ error: "Failed to fetch prices from API" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Proxy server running on port ${PORT}`);
 });
