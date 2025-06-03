@@ -3,10 +3,11 @@ const fetch = require("node-fetch");
 const cors = require("cors");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(cors());
 
-const TOKEN = "FPDAPI SubscriberToken=90fb2504-6e01-4528-9640-b0f37265e749";
-const API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices";
+const API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1";
 
 app.get("/prices", async (req, res) => {
   try {
@@ -20,14 +21,12 @@ app.get("/prices", async (req, res) => {
 
     const data = await response.json();
     res.json(data);
-
   } catch (err) {
     console.error("❌ API fetch failed:", err.message);
     res.status(500).json({ error: "Failed to fetch prices from API" });
   }
 });
 
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Proxy server listening on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
