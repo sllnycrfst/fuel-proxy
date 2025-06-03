@@ -13,20 +13,17 @@ app.get("/prices", async (req, res) => {
     const response = await fetch(API_URL, {
       method: "GET",
       headers: {
-        Authorization: TOKEN,
+        "FPDAPI-SubscriberToken": "90fb2504-6e01-4528-9640-b0f37265e749",
         "Content-Type": "application/json"
       }
     });
 
-    if (!response.ok) {
-      return res.status(500).json({ error: "Failed to fetch prices from API" });
-    }
-
     const data = await response.json();
     res.json(data);
+
   } catch (err) {
-    console.error("Backend error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ API fetch failed:", err.message);
+    res.status(500).json({ error: "Failed to fetch prices from API" });
   }
 });
 
