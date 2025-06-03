@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-const API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1";
+const API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21";
 
 app.get("/prices", async (req, res) => {
   try {
@@ -19,20 +19,20 @@ app.get("/prices", async (req, res) => {
       }
     });
 
+    const text = await response.text();
+
     if (!response.ok) {
-      const text = await response.text();
-      console.error("❌ API returned non-200 response:", text);
+      console.error("❌ API response not OK:", text);
       return res.status(500).json({ error: "External API error", details: text });
     }
 
-    const data = await response.json();
-    res.json(data);
+    res.type("json").send(text);
   } catch (err) {
-    console.error("❌ Failed to fetch prices from API:", err);
+    console.error("❌ Proxy failed:", err);
     res.status(500).json({ error: "Failed to fetch prices from API" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Proxy server running on port ${PORT}`);
+  console.log(`✅ Proxy running on port ${PORT}`);
 });
