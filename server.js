@@ -14,9 +14,9 @@ app.get("/prices", async (req, res) => {
     const response = await fetch(API_URL, {
       method: "GET",
       headers: {
-        "FPDAPI-SubscriberToken": "90fb2504-6e01-4528-9640-b0f37265e749",
-        "Content-Type": "application/json"
-      }
+  "FPDAPI-SubscriberToken": "90fb2504-6e01-4528-9640-b0f37265e749",
+  "Content-Type": "application/json"
+}
     });
 
     const data = await response.json();
