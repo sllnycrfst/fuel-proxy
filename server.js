@@ -165,7 +165,7 @@ app.get("/", (req, res) => {
     <ul>
       <li><a href="/prices">/prices</a> — QLD fuel prices</li>
       <li><a href="/nsw">/nsw</a> — NSW fuel prices</li>
-      <li><a href="/nsw?states=NSW,TAS">/nsw?states=NSW,TAS</a> — NSW + TAS</li>
+      <li><a href="/tas">/tas</a> — TAS fuel prices</li>
     </ul>
   `);
 });
