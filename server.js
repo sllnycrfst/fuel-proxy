@@ -13,13 +13,11 @@ const QLD_TOKEN = "90fb2504-6e01-4528-9640-b0f37265e749";
 app.get("/prices", async (req, res) => {
   try {
     const response = await fetch(QLD_API_URL, {
-      method: "POST", // ✅ Must be POST
+      method: "GET", // ✅ Switched from POST to GET
       headers: {
-        "Authorization": `FPDAPI SubscriberToken=${QLD_TOKEN}`, // ✅ Keep the space, not a dash
-        "Content-Type": "application/json",
+        "Authorization": `FPDAPI SubscriberToken=${QLD_TOKEN}`, // ✅ keep the space
         "Accept": "application/json"
-      },
-      body: JSON.stringify({})
+      }
     });
 
     if (!response.ok) {
@@ -37,6 +35,7 @@ app.get("/prices", async (req, res) => {
     res.status(500).json({ error: "QLD fetch failed", details: err.message });
   }
 });
+
 
 
 // ========================== NSW ==========================
