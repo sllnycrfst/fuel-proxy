@@ -48,51 +48,60 @@ app.get("/prices", async (req, res) => {
 // ========================== NSW ==========================
 app.get("/nsw", async (req, res) => {
   try {
+    console.log("🟦 NSW endpoint hit");
+
+    // Step 1: Get a fresh access token
     const tokenRes = await fetch(
       "https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials",
       {
         method: "GET",
         headers: {
-          "Authorization": process.env.NSW_AUTH,
+          "Authorization": process.env.NSW_AUTH, // Basic base64(clientId:secret)
           "Accept": "application/json"
         }
       }
     );
-    const tokenJson = await tokenRes.json();
-    if (!tokenRes.ok || !tokenJson.access_token) {
-      console.error("❌ NSW token fetch failed:", tokenRes.status, tokenJson);
-      return res.status(500).json({ error: "NSW token fetch failed", details: tokenJson });
+
+    const tokenText = await tokenRes.text();
+    let tokenJson = {};
+    try { tokenJson = JSON.parse(tokenText); } catch {}
+    console.log("🔑 NSW token acquired:", !!tokenJson.access_token);
+
+    if (!tokenJson.access_token) {
+      return res.status(500).json({ error: "No NSW access token", details: tokenText });
     }
-    const accessToken = tokenJson.access_token;
 
-    const now = new Date();
-    const requesttimestamp = now.toLocaleString("en-AU", { hour12: true }).replace(",", "");
-
+    // Step 2: Request NSW prices
+    const now = new Date().toISOString();
     const fuelRes = await fetch(
       "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices/new?states=NSW",
       {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${accessToken}`,
+          "Authorization": `Bearer ${tokenJson.access_token}`,
           "apikey": process.env.NSW_APIKEY,
           "transactionid": Date.now().toString(),
-          "requesttimestamp": requesttimestamp,
-          "Accept": "application/json"
+          "requesttimestamp": now,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Origin": "https://fuel-proxy-119d.onrender.com"
         }
       }
     );
 
-    const jsonData = await fuelRes.json();
+    const raw = await fuelRes.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch {}
+
     if (!fuelRes.ok) {
-      console.error("❌ NSW API returned error:", fuelRes.status, jsonData);
-      return res.status(fuelRes.status).json({ error: "NSW API fetch failed", details: jsonData });
+      console.error("❌ NSW API Error:", fuelRes.status, raw);
+      return res.status(fuelRes.status).json({ error: "NSW fetch failed", details: raw });
     }
 
+    console.log(`✅ NSW returned ${data.stations?.length || 0} stations and ${data.prices?.length || 0} prices`);
     res.set("Access-Control-Allow-Origin", "*");
-    res.json({
-      stations: jsonData.stations || jsonData.stationsList || [],
-      prices: jsonData.prices || []
-    });
+    res.json(data);
+
   } catch (err) {
     console.error("❌ NSW fetch failed:", err);
     res.status(500).json({ error: "NSW fetch failed", details: err.message });
@@ -103,56 +112,66 @@ app.get("/nsw", async (req, res) => {
 // ========================== TAS ==========================
 app.get("/tas", async (req, res) => {
   try {
+    console.log("🟪 TAS endpoint hit");
+
+    // Step 1: Get a fresh access token
     const tokenRes = await fetch(
       "https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials",
       {
         method: "GET",
         headers: {
-          "Authorization": process.env.NSW_AUTH,
-          "Accept": "application/json"
-        }
-      }
-    ); 
-    const tokenJson = await tokenRes.json();
-    if (!tokenRes.ok || !tokenJson.access_token) {
-      console.error("❌ TAS token fetch failed:", tokenRes.status, tokenJson);
-      return res.status(500).json({ error: "TAS token fetch failed", details: tokenJson });
-    }
-    const accessToken = tokenJson.access_token;
-
-    const now = new Date();
-    const requesttimestamp = now.toLocaleString("en-AU", { hour12: true }).replace(",", "");
-
-    const fuelRes = await fetch(
-      "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices/new?states=TAS",
-      {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "apikey": process.env.NSW_APIKEY,
-          "transactionid": Date.now().toString(),
-          "requesttimestamp": requesttimestamp,
+          "Authorization": process.env.NSW_AUTH, // same creds used for TAS
           "Accept": "application/json"
         }
       }
     );
 
-    const jsonData = await fuelRes.json();
-    if (!fuelRes.ok) {
-      console.error("❌ TAS API returned error:", fuelRes.status, jsonData);
-      return res.status(fuelRes.status).json({ error: "TAS API fetch failed", details: jsonData });
+    const tokenText = await tokenRes.text();
+    let tokenJson = {};
+    try { tokenJson = JSON.parse(tokenText); } catch {}
+    console.log("🔑 TAS token acquired:", !!tokenJson.access_token);
+
+    if (!tokenJson.access_token) {
+      return res.status(500).json({ error: "No TAS access token", details: tokenText });
     }
 
+    // Step 2: Request TAS prices
+    const now = new Date().toISOString();
+    const fuelRes = await fetch(
+      "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices/new?states=TAS",
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${tokenJson.access_token}`,
+          "apikey": process.env.NSW_APIKEY,
+          "transactionid": Date.now().toString(),
+          "requesttimestamp": now,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Origin": "https://fuel-proxy-119d.onrender.com"
+        }
+      }
+    );
+
+    const raw = await fuelRes.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch {}
+
+    if (!fuelRes.ok) {
+      console.error("❌ TAS API Error:", fuelRes.status, raw);
+      return res.status(fuelRes.status).json({ error: "TAS fetch failed", details: raw });
+    }
+
+    console.log(`✅ TAS returned ${data.stations?.length || 0} stations and ${data.prices?.length || 0} prices`);
     res.set("Access-Control-Allow-Origin", "*");
-    res.json({
-      stations: jsonData.stations || jsonData.stationsList || [],
-      prices: jsonData.prices || []
-    });
+    res.json(data);
+
   } catch (err) {
     console.error("❌ TAS fetch failed:", err);
     res.status(500).json({ error: "TAS fetch failed", details: err.message });
   }
 });
+
 
 
 
