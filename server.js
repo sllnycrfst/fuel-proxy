@@ -45,74 +45,73 @@ app.get("/prices", async (req, res) => {
   }
 });
 
+// ========================== NSW + TAS ==========================
 app.get("/nsw", async (req, res) => {
   try {
-    const mode = req.query.mode || "new";
-
-    // Step 1: Get access token
-    const tokenResponse = await fetch(
+    // 1️⃣  Get NSW API token
+    const tokenRes = await fetch(
       "https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials",
       {
         method: "GET",
         headers: {
-          "Authorization": process.env.NSW_AUTH,
+          "Authorization": process.env.NSW_AUTH, // Basic base64(key:secret)
           "Accept": "application/json"
         }
       }
     );
 
-    const tokenData = await tokenResponse.json();
-    if (!tokenResponse.ok || !tokenData.access_token) {
-      return res.status(500).json({ error: "Failed to fetch NSW token", message: tokenData });
+    const tokenJson = await tokenRes.json();
+    if (!tokenRes.ok || !tokenJson.access_token) {
+      console.error("❌ NSW token fetch failed:", tokenRes.status, tokenJson);
+      return res.status(500).json({ error: "NSW token fetch failed", details: tokenJson });
     }
 
-    const accessToken = tokenData.access_token;
-    const requesttimestamp = new Date().toISOString();
+    const accessToken = tokenJson.access_token;
 
-    // Helper to fetch one state
-    const fetchState = async (state) => {
-      const url = `https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices/${mode}?states=${state}`;
-      const response = await fetch(url, {
+    // 2️⃣  Fetch fuel prices for NSW + TAS
+    const now = new Date();
+    const requesttimestamp = now.toLocaleString("en-AU", { hour12: true }).replace(",", "");
+
+    const fuelRes = await fetch(
+      "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices/new?states=NSW,TAS",
+      {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json; charset=utf-8",
           "apikey": process.env.NSW_APIKEY,
           "transactionid": Date.now().toString(),
           "requesttimestamp": requesttimestamp,
           "Accept": "application/json",
           "User-Agent": "FuelDaddyProxy/1.0"
         }
-      });
-      const raw = await response.text();
-      let json = {};
-      try { json = JSON.parse(raw); } catch {}
-      console.log(`📦 ${state} FUEL API returned`,
-        (json?.stations || []).length, "stations and",
-        (json?.prices || []).length, "prices"
-      );
-      return json;
-    };
+      }
+    );
 
-    // Step 2: Fetch both states separately
-    const [nswData, tasData] = await Promise.all([
-      fetchState("NSW"),
-      fetchState("TAS")
-    ]);
+    const jsonText = await fuelRes.text();
+    let jsonData = {};
+    try { jsonData = JSON.parse(jsonText); } catch {
+      console.error("⚠️ Invalid NSW JSON:", jsonText.slice(0, 200));
+      return res.status(500).json({ error: "Invalid JSON from NSW API", text: jsonText });
+    }
 
-    // Step 3: Merge and send
-    const stations = [...(nswData?.stations || []), ...(tasData?.stations || [])];
-    const prices = [...(nswData?.prices || []), ...(tasData?.prices || [])];
+    if (!fuelRes.ok || !jsonData.prices) {
+      console.error("❌ NSW API returned error:", fuelRes.status, jsonData);
+      return res.status(fuelRes.status).json({ error: "NSW API fetch failed", details: jsonData });
+    }
 
-    console.log(`✅ Proxy forwarding ${stations.length} stations and ${prices.length} prices (NSW+TAS)`);
+    // 3️⃣  Build the format expected by your front-end
+    const stations = jsonData.stations || jsonData.stationsList || [];
+    const prices = jsonData.prices || [];
 
     res.set("Access-Control-Allow-Origin", "*");
-    return res.json({ stations, prices });
+    res.json({ stations, prices });
+
   } catch (err) {
-    console.error("❌ NSW+TAS fetch failed:", err);
-    res.status(500).json({ error: "NSW+TAS fetch failed", details: err.message });
+    console.error("❌ NSW fetch failed:", err);
+    res.status(500).json({ error: "NSW fetch failed", details: err.message });
   }
 });
+
 
 
 // ========================== ROOT TEST ==========================
