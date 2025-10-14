@@ -69,7 +69,7 @@ app.get("/nsw", async (req, res) => {
 
     // Step 2: Request NSW + TAS prices (v2)
     const date = new Date();
-    const requesttimestamp = date
+    const requesttimestamp = new Date().toISOString();
       .toLocaleString("en-AU", { hour12: true })
       .replace(",", "");
 
