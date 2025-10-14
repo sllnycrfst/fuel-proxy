@@ -7,15 +7,15 @@ app.use(cors());
 app.use(express.json());
 
 // ========================== QLD ==========================
-const QLD_API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices";
+const QLD_API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1";
 const QLD_TOKEN = "90fb2504-6e01-4528-9640-b0f37265e749";
 
 app.get("/prices", async (req, res) => {
   try {
     const response = await fetch(QLD_API_URL, {
-      method: "POST",
+      method: "POST", // ✅ Must be POST
       headers: {
-        "Authorization": `FPDAPI SubscriberToken=${QLD_TOKEN}`, // ✅ must have space
+        "Authorization": `FPDAPI SubscriberToken=${QLD_TOKEN}`, // ✅ Keep the space, not a dash
         "Content-Type": "application/json",
         "Accept": "application/json"
       },
@@ -23,18 +23,21 @@ app.get("/prices", async (req, res) => {
     });
 
     if (!response.ok) {
-      console.error("QLD API Error:", response.status);
-      return res.status(response.status).json({ error: `QLD API ${response.status}` });
+      const text = await response.text();
+      console.error("QLD API Error:", response.status, text);
+      return res.status(response.status).json({ error: `QLD API ${response.status}`, message: text });
     }
 
     const data = await response.json();
     res.set("Access-Control-Allow-Origin", "*");
     res.json(data);
+
   } catch (err) {
     console.error("❌ QLD fetch failed:", err.message);
     res.status(500).json({ error: "QLD fetch failed", details: err.message });
   }
 });
+
 
 // ========================== NSW ==========================
 app.get("/nsw", async (req, res) => {
