@@ -15,8 +15,9 @@ app.get("/prices", async (req, res) => {
     const response = await fetch(QLD_API_URL, {
       method: "POST",
       headers: {
-        Authorization: `FPDAPI SubscriberToken=${QLD_TOKEN}`,
+        "Authorization": `FPDAPI-SubscriberToken=${QLD_TOKEN}`, // ✅ fixed dash
         "Content-Type": "application/json",
+        "Accept": "application/json",
       },
       body: JSON.stringify({}),
     });
@@ -42,8 +43,11 @@ app.get("/nsw", async (req, res) => {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": process.env.NSW_AUTH,  // 👈 from Render Environment
-        "apikey": process.env.NSW_APIKEY,       // 👈 from Render Environment
+        "Authorization": process.env.NSW_AUTH,
+        "apikey": process.env.NSW_APIKEY,
+        "transactionid": Date.now().toString(),
+        "requesttimestamp": new Date().toISOString(),
+        "User-Agent": "FuelDaddyProxy/1.0"
       },
     });
 
@@ -61,7 +65,7 @@ app.get("/nsw", async (req, res) => {
   }
 });
 
-// ========== Root Route (optional test page) ==========
+// ========== Root Route ==========
 app.get("/", (req, res) => {
   res.send(`
     <h2>🚀 Fuel Proxy is live!</h2>
