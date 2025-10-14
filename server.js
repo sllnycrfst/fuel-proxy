@@ -7,9 +7,11 @@ app.use(cors());
 app.use(express.json());
 
 // ========================== QLD ==========================
-const QLD_API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1";
+const QLD_API_URL =
+  "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1";
 const QLD_TOKEN = "90fb2504-6e01-4528-9640-b0f37265e749";
 
+// ---------- QLD endpoint ----------
 app.get("/prices", async (req, res) => {
   try {
     console.log("🟩 QLD endpoint hit");
@@ -25,7 +27,10 @@ app.get("/prices", async (req, res) => {
     if (!response.ok) {
       const text = await response.text();
       console.error("QLD API Error:", response.status, text);
-      return res.status(response.status).json({ error: `QLD API ${response.status}`, message: text });
+      return res.status(response.status).json({
+        error: `QLD API ${response.status}`,
+        message: text
+      });
     }
 
     const data = await response.json();
@@ -35,19 +40,24 @@ app.get("/prices", async (req, res) => {
 
   } catch (err) {
     console.error("❌ QLD fetch failed:", err.message);
-    res.status(500).json({ error: "QLD fetch failed", details: err.message });
+    res.status(500).json({
+      error: "QLD fetch failed",
+      details: err.message
+    });
   }
 });
 
+// ---------- Root test page ----------
 app.get("/", (req, res) => {
   res.send(`
-    <h2>🚀 FuelDaddy Proxy is Live</h2>
-    <p>Available endpoints:</p>
+    <h1>🚀 FuelDaddy Proxy is Live</h1>
+    <p>This proxy currently supports <strong>Queensland fuel prices only</strong>.</p>
     <ul>
-      <li><a href="/prices">/prices</a> — QLD fuel prices only</li>
+      <li><a href="/prices">/prices</a> — Live QLD fuel prices (JSON)</li>
     </ul>
+    <p>Powered by <em>FuelDaddy</em> — ${new Date().toLocaleString("en-AU")}</p>
   `);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ FuelDaddy Proxy running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ FuelDaddy QLD Proxy running on port ${PORT}`));
