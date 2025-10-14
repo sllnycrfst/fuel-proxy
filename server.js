@@ -74,7 +74,7 @@ app.get("/nsw", async (req, res) => {
       .replace(",", "");
 
     const fuelResponse = await fetch(
-      "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices?states=NSW",
+      "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices/new?states=NSW",
       {
         method: "GET",
         headers: {
