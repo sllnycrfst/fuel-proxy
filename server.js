@@ -3,31 +3,32 @@ const fetch = require("node-fetch");
 const cors = require("cors");
 
 const app = express();
-app.use(cors()); // ✅ MUST be before routes
+app.use(cors()); // ✅ Enables CORS globally
+app.use(express.json());
 
-const API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1";
+// ========== QLD Route ==========
+const API_URL = "https://fppdirectapi-prod.fuelpricesqld.com.au/Price/GetSitesPrices";
 const TOKEN = "90fb2504-6e01-4528-9640-b0f37265e749";
 
 app.get("/prices", async (req, res) => {
   try {
     const response = await fetch(API_URL, {
-      method: "GET",
+      method: "POST", // ✅ QLD API requires POST, not GET
       headers: {
         Authorization: `FPDAPI SubscriberToken=${TOKEN}`,
         "Content-Type": "application/json"
-      }
+      },
+      body: JSON.stringify({})
     });
 
     const data = await response.json();
+    res.set("Access-Control-Allow-Origin", "*");
     res.json(data);
   } catch (err) {
     console.error("❌ External API error:", err.message);
     res.status(500).json({ error: "External API error", details: err.message });
   }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 
 // ========== NSW Route ==========
 app.get("/nsw", async (req, res) => {
@@ -54,4 +55,7 @@ app.get("/nsw", async (req, res) => {
     res.status(500).json({ error: "NSW fetch failed" });
   }
 });
-app.listen(3000, () => console.log("✅ Fuel proxy running on port 3000"));
+
+// ========== START SERVER ==========
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ Fuel proxy running on port ${PORT}`));
