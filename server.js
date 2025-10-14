@@ -38,20 +38,18 @@ app.get("/prices", async (req, res) => {
 
 
 
-// ========================== NSW (corrected final) ==========================
+// ========================== NSW (final confirmed setup) ==========================
 app.get("/nsw", async (req, res) => {
   try {
-    // Step 1: Obtain access token from v1 OAuth endpoint
+    // Step 1: Get access token (MUST BE GET, not POST)
     const tokenResponse = await fetch(
       "https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials",
       {
-        method: "POST",
+        method: "GET",
         headers: {
-          "Authorization": process.env.NSW_AUTH,
-          "apikey": process.env.NSW_APIKEY,
-          "Content-Type": "application/json",
-          "Content-Length": "0",
-        },
+          "Authorization": process.env.NSW_AUTH, // Basic base64(key:secret)
+          "Accept": "application/json"
+        }
       }
     );
 
@@ -61,23 +59,35 @@ app.get("/nsw", async (req, res) => {
 
     if (!tokenResponse.ok || !tokenData.access_token) {
       console.error("NSW Token Error:", tokenResponse.status, rawToken);
-      return res.status(tokenResponse.status).json({ error: "NSW token fetch failed", message: rawToken });
+      return res.status(tokenResponse.status).json({
+        error: "NSW token fetch failed",
+        message: rawToken
+      });
     }
 
     const accessToken = tokenData.access_token;
 
-    // Step 2: Request v2 fuel prices using bearer token
-    const fuelResponse = await fetch("https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices", {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "apikey": process.env.NSW_APIKEY,
-        "transactionid": Date.now().toString(),
-        "requesttimestamp": new Date().toISOString(),
-        "User-Agent": "FuelDaddyProxy/1.0",
-        "Accept": "application/json",
-      },
-    });
+    // Step 2: Request NSW + TAS prices (v2)
+    const date = new Date();
+    const requesttimestamp = date
+      .toLocaleString("en-AU", { hour12: true })
+      .replace(",", "");
+
+    const fuelResponse = await fetch(
+      "https://api.onegov.nsw.gov.au/FuelPriceCheck/v2/fuel/prices?states=NSWITAS",
+      {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json; charset=utf-8",
+          "apikey": process.env.NSW_APIKEY,
+          "transactionid": Date.now().toString(),
+          "requesttimestamp": requesttimestamp,
+          "Accept": "application/json",
+          "User-Agent": "FuelDaddyProxy/1.0"
+        }
+      }
+    );
 
     const rawFuel = await fuelResponse.text();
     let fuelData = {};
@@ -85,7 +95,10 @@ app.get("/nsw", async (req, res) => {
 
     if (!fuelResponse.ok) {
       console.error("NSW API Error:", fuelResponse.status, rawFuel);
-      return res.status(fuelResponse.status).json({ error: "NSW API fetch failed", message: rawFuel });
+      return res.status(fuelResponse.status).json({
+        error: "NSW API fetch failed",
+        message: rawFuel
+      });
     }
 
     res.set("Access-Control-Allow-Origin", "*");
@@ -96,6 +109,7 @@ app.get("/nsw", async (req, res) => {
     res.status(500).json({ error: "NSW fetch failed", details: err.message });
   }
 });
+
 
 
 
