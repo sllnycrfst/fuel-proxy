@@ -101,6 +101,8 @@ app.get("/nsw", async (req, res) => {
       fuelData = JSON.parse(rawFuel);
     } catch {}
 
+    console.log("NSW FUEL API returned", fuelData?.stations?.length, "stations and", fuelData?.prices?.length, "prices");
+
     if (!fuelResponse.ok) {
       console.error("NSW API Error:", fuelResponse.status, rawFuel);
       return res
