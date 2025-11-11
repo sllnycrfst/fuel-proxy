@@ -4,21 +4,21 @@ const cors = require("cors");
 
 const app = express();
 
-// ================== GLOBAL CORS ==================
-app.use(
-  cors({
-    origin: [
-      "https://sell-any-car-fast-form.webflow.io",
-      "https://www.sellanycarfast.com.au"
-    ],
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  })
-);
-
-// Handle preflight requests cleanly
-app.options("*", cors());
+// ================== CORS & PREFLIGHT HANDLER ==================
 app.use(express.json());
+
+// 🔧 Always send OK to browser preflights
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://sell-any-car-fast-form.webflow.io");
+  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Origin", "https://www.sellanycarfast.com.au");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // ========================== FUEL DADDY (QLD) ==========================
 const QLD_API_URL =
