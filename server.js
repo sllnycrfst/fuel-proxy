@@ -61,3 +61,21 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ FuelDaddy QLD Proxy running on port ${PORT}`));
+
+app.post("/vin", async (req, res) => {
+  try {
+    const response = await fetch("https://algodriven.io/v1/vindataext", {
+      method: "POST",
+      headers: {
+        "Authorization": "4PdxaDHXXmPE4b9O3v19fW0zrL8dXu+WxwzVJXO4sngB/9+b5qh/iDF04aMEZMABVy8oFYjBIKZLqTTbzLtXvOc/QBcONPJ40/Ma67AiWSQ=",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Proxy error", details: err.message });
+  }
+});
