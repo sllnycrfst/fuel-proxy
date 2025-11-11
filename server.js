@@ -3,7 +3,17 @@ const fetch = require("node-fetch");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "https://sell-any-car-fast-form.webflow.io", // your live Webflow domain
+      "https://www.sellanycarfast.com.au"          // your main site, if needed
+    ],
+    methods: ["POST", "GET", "OPTIONS"],
+    allowedHeaders: ["Content-Type"]
+  })
+);
+
 app.use(express.json());
 
 // ========================== QLD ==========================
