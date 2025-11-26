@@ -19,6 +19,12 @@ app.use((req, res, next) => {
   }
   next();
 });
+// MapKit token route
+app.get("/mapkit-token", (req, res) => {
+  res.json({
+    token: process.env.MAPKIT_TOKEN
+  });
+});
 
 // ========================== FUEL DADDY (QLD) ==========================
 const QLD_API_URL =
