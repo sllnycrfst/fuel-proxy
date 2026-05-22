@@ -91,38 +91,7 @@ app.get("/sites", async (req, res) => {
   }
 });
 
-// ========================== VIN LOOKUP (Eval Expert / AlgoDriven) ==========================
-app.post("/vin", async (req, res) => {
-  try {
-    console.log("🚗 VIN lookup hit", req.body);
 
-    const response = await fetch("https://algodriven.io/v1/vindataext", {
-      method: "POST",
-      headers: {
-        "Authorization":
-          "4PdxaDHXXmPE4b9O3v19fW0zrL8dXu+WxwzVJXO4sngB/9+b5qh/iDF04aMEZMABVy8oFYjBIKZLqTTbzLtXvOc/QBcONPJ40/Ma67AiWSQ=",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(req.body),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("VIN API error:", response.status, text);
-      return res.status(response.status).json({
-        error: `VIN API ${response.status}`,
-        message: text,
-      });
-    }
-
-    const data = await response.json();
-    console.log("✅ VIN lookup success");
-    res.json(data);
-  } catch (err) {
-    console.error("❌ VIN fetch failed:", err.message);
-    res.status(500).json({ error: "Proxy error", details: err.message });
-  }
-});
 
 // ========================== ROOT TEST PAGE ==========================
 app.get("/", (req, res) => {
@@ -132,7 +101,6 @@ app.get("/", (req, res) => {
     <ul>
       <li>⛽ <a href="/prices">/prices</a> — Live QLD fuel prices (JSON)</li>
       <li>📍 <a href="/sites">/sites</a> — Full QLD station list (cached 24h)</li>
-      <li>🚗 <strong>POST /vin</strong> — Eval Expert VIN lookup</li>
     </ul>
     <p>Powered by <em>FuelDaddy</em> — ${new Date().toLocaleString("en-AU")}</p>
   `);
