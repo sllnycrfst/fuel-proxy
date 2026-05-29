@@ -14,10 +14,14 @@
 const OAUTH_URL = 'https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials';
 const API_BASE = 'https://api.onegov.nsw.gov.au';
 
-const APIKEY = process.env.NSW_API_KEY;
-const APISECRET = process.env.NSW_API_SECRET;
+// Accept either variable name style — the existing nsw-proxy Render
+// service had NSW_APIKEY / NSW_APISECRET (no underscore between API and
+// KEY/SECRET); the merged service falls back to those if the underscore
+// variant isn't set, so existing env groups work unchanged.
+const APIKEY = process.env.NSW_API_KEY || process.env.NSW_APIKEY;
+const APISECRET = process.env.NSW_API_SECRET || process.env.NSW_APISECRET;
 if (!APIKEY || !APISECRET) {
-  console.error('[NSW] FATAL: NSW_API_KEY and NSW_API_SECRET env vars are required');
+  console.error('[NSW] FATAL: set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET) env vars');
   process.exit(1);
 }
 

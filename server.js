@@ -29,12 +29,15 @@ const qld = require('./qld');
 let nswApi, transform;
 let nswEnabled = false;
 try {
-  if (process.env.NSW_API_KEY && process.env.NSW_API_SECRET) {
+  // Accept either NSW_APIKEY (legacy nsw-proxy name) or NSW_API_KEY
+  const hasKey    = process.env.NSW_API_KEY    || process.env.NSW_APIKEY;
+  const hasSecret = process.env.NSW_API_SECRET || process.env.NSW_APISECRET;
+  if (hasKey && hasSecret) {
     nswApi = require('./nsw-api');
     transform = require('./transform');
     nswEnabled = true;
   } else {
-    console.warn('[combined-proxy] NSW disabled — NSW_API_KEY / NSW_API_SECRET not set');
+    console.warn('[combined-proxy] NSW disabled — set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET) on this service');
   }
 } catch (e) {
   console.error('[combined-proxy] NSW init failed:', e.message);
@@ -212,7 +215,7 @@ app.get('/qld/sites',  qldSitesHandler);  // explicit
 // ─── NSW endpoints (mirror old NSW proxy shape) ──────────────────────
 function require503IfNotReady(res) {
   if (!nswEnabled) {
-    res.status(503).json({ error: 'NSW disabled — NSW_API_KEY / NSW_API_SECRET not set on this Render service' });
+    res.status(503).json({ error: 'NSW disabled — set NSW_APIKEY + NSW_APISECRET env vars on this Render service' });
     return true;
   }
   if (!nswState.firstFetchDone) {

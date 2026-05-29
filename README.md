@@ -36,9 +36,11 @@ If `NSW_API_KEY` and `NSW_API_SECRET` are missing the service still starts — Q
 
 This repo deploys to the Render service backing `https://fuel-proxy-1l9d.onrender.com`. Required env vars:
 
-- `NSW_API_KEY` — copy from the old `fuel-daddy-nsw-proxy` service
-- `NSW_API_SECRET` — same
+- `NSW_APIKEY` — copy from the old `fuel-daddy-nsw-proxy` service
+- `NSW_APISECRET` — same
 - `REFRESH_TOKEN` — random string of your choice
+
+(The code also accepts the underscore variants `NSW_API_KEY` / `NSW_API_SECRET` if you'd rather standardise on those.)
 - `MAPKIT_TOKEN` — (optional) only if `sellanycarfast.com.au` still uses this proxy
 - `QLD_TOKEN` — (optional) defaults to the in-code prod token
 
