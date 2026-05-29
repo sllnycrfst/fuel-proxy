@@ -14,21 +14,51 @@
 const OAUTH_URL = 'https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials';
 const API_BASE = 'https://api.onegov.nsw.gov.au';
 
-// Tolerant env-var resolution — the two original proxies used different
-// naming conventions, so callers may have any of these names set:
-//   - NSW_API_KEY    | NSW_APIKEY                       → the API key
-//   - NSW_API_SECRET | NSW_APISECRET                    → the API secret
-//   - NSW_BASIC_AUTH | NSW_AUTH (if starts with "Basic ") → pre-built auth header
-//   - NSW_AUTH (otherwise)                              → treated as secret
+// Tolerant env-var resolution — supports every name convention any of the
+// original proxies used:
+//   - NSW_API_KEY    | NSW_APIKEY     → API key (consumer key)
+//   - NSW_API_SECRET | NSW_APISECRET  → API secret (consumer secret)
+//   - NSW_BASIC_AUTH                  → complete header, "Basic <b64>"
+//   - NSW_AUTH                        → polymorphic, auto-detected:
+//        · "Basic xxxx..."     → use verbatim as auth header
+//        · base64 of "key:sec" → prepend "Basic " and use as auth header
+//        · plain string        → treated as API secret (paired with APIKEY)
+//
+// Detection for the "bare base64 key:secret" case: must be base64 charset,
+// and the decoded form must contain a colon (the key:secret separator).
+
+function looksLikeBase64KeySecret(s) {
+  if (!s || typeof s !== 'string') return false;
+  if (!/^[A-Za-z0-9+/=]+$/.test(s)) return false;
+  if (s.length < 16) return false; // way too short to be a meaningful key:secret pair
+  try {
+    const decoded = Buffer.from(s, 'base64').toString('utf8');
+    return decoded.includes(':');
+  } catch (e) {
+    return false;
+  }
+}
+
 const APIKEY = process.env.NSW_API_KEY || process.env.NSW_APIKEY;
-const APISECRET = process.env.NSW_API_SECRET
-                || process.env.NSW_APISECRET
-                || (process.env.NSW_AUTH && !/^\s*Basic\s+/i.test(process.env.NSW_AUTH) ? process.env.NSW_AUTH : null);
-const BASIC_AUTH_OVERRIDE = process.env.NSW_BASIC_AUTH
-                          || (process.env.NSW_AUTH && /^\s*Basic\s+/i.test(process.env.NSW_AUTH) ? process.env.NSW_AUTH : null);
+
+let BASIC_AUTH_OVERRIDE = null;
+let APISECRET = process.env.NSW_API_SECRET || process.env.NSW_APISECRET;
+
+if (process.env.NSW_BASIC_AUTH) {
+  BASIC_AUTH_OVERRIDE = process.env.NSW_BASIC_AUTH;
+} else if (process.env.NSW_AUTH) {
+  const v = process.env.NSW_AUTH.trim();
+  if (/^Basic\s+/i.test(v)) {
+    BASIC_AUTH_OVERRIDE = v;
+  } else if (looksLikeBase64KeySecret(v)) {
+    BASIC_AUTH_OVERRIDE = 'Basic ' + v;
+  } else if (!APISECRET) {
+    APISECRET = v; // plain secret
+  }
+}
 
 if (!BASIC_AUTH_OVERRIDE && (!APIKEY || !APISECRET)) {
-  console.error('[NSW] FATAL: set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET, or NSW_AUTH/NSW_BASIC_AUTH with a "Basic ..." header)');
+  console.error('[NSW] FATAL: set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET, or NSW_AUTH containing either a "Basic ..." header or the base64 of key:secret)');
   process.exit(1);
 }
 
