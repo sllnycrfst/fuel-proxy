@@ -14,19 +14,26 @@
 const OAUTH_URL = 'https://api.onegov.nsw.gov.au/oauth/client_credential/accesstoken?grant_type=client_credentials';
 const API_BASE = 'https://api.onegov.nsw.gov.au';
 
-// Accept either variable name style — the existing nsw-proxy Render
-// service had NSW_APIKEY / NSW_APISECRET (no underscore between API and
-// KEY/SECRET); the merged service falls back to those if the underscore
-// variant isn't set, so existing env groups work unchanged.
+// Tolerant env-var resolution — the two original proxies used different
+// naming conventions, so callers may have any of these names set:
+//   - NSW_API_KEY    | NSW_APIKEY                       → the API key
+//   - NSW_API_SECRET | NSW_APISECRET                    → the API secret
+//   - NSW_BASIC_AUTH | NSW_AUTH (if starts with "Basic ") → pre-built auth header
+//   - NSW_AUTH (otherwise)                              → treated as secret
 const APIKEY = process.env.NSW_API_KEY || process.env.NSW_APIKEY;
-const APISECRET = process.env.NSW_API_SECRET || process.env.NSW_APISECRET;
-if (!APIKEY || !APISECRET) {
-  console.error('[NSW] FATAL: set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET) env vars');
+const APISECRET = process.env.NSW_API_SECRET
+                || process.env.NSW_APISECRET
+                || (process.env.NSW_AUTH && !/^\s*Basic\s+/i.test(process.env.NSW_AUTH) ? process.env.NSW_AUTH : null);
+const BASIC_AUTH_OVERRIDE = process.env.NSW_BASIC_AUTH
+                          || (process.env.NSW_AUTH && /^\s*Basic\s+/i.test(process.env.NSW_AUTH) ? process.env.NSW_AUTH : null);
+
+if (!BASIC_AUTH_OVERRIDE && (!APIKEY || !APISECRET)) {
+  console.error('[NSW] FATAL: set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET, or NSW_AUTH/NSW_BASIC_AUTH with a "Basic ..." header)');
   process.exit(1);
 }
 
 function buildBasicAuth() {
-  if (process.env.NSW_BASIC_AUTH) return process.env.NSW_BASIC_AUTH;
+  if (BASIC_AUTH_OVERRIDE) return BASIC_AUTH_OVERRIDE;
   const raw = `${APIKEY}:${APISECRET}`;
   return 'Basic ' + Buffer.from(raw, 'utf8').toString('base64');
 }

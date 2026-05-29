@@ -29,15 +29,17 @@ const qld = require('./qld');
 let nswApi, transform;
 let nswEnabled = false;
 try {
-  // Accept either NSW_APIKEY (legacy nsw-proxy name) or NSW_API_KEY
+  // Soft-enable NSW if any acceptable env var combination is set. nsw-api.js
+  // does the actual resolution and will exit cleanly if it can't find creds.
   const hasKey    = process.env.NSW_API_KEY    || process.env.NSW_APIKEY;
-  const hasSecret = process.env.NSW_API_SECRET || process.env.NSW_APISECRET;
-  if (hasKey && hasSecret) {
+  const hasSecret = process.env.NSW_API_SECRET || process.env.NSW_APISECRET || process.env.NSW_AUTH;
+  const hasBasic  = process.env.NSW_BASIC_AUTH || (process.env.NSW_AUTH && /^\s*Basic\s+/i.test(process.env.NSW_AUTH));
+  if (hasBasic || (hasKey && hasSecret)) {
     nswApi = require('./nsw-api');
     transform = require('./transform');
     nswEnabled = true;
   } else {
-    console.warn('[combined-proxy] NSW disabled — set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET) on this service');
+    console.warn('[combined-proxy] NSW disabled — set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET, or NSW_AUTH) on this service');
   }
 } catch (e) {
   console.error('[combined-proxy] NSW init failed:', e.message);
