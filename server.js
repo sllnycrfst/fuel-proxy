@@ -26,7 +26,7 @@ const cors = require('cors');
 const qld = require('./qld');
 
 // NSW modules — wrap in try so missing env vars don't kill the whole service
-let nswApi, transform, nswOutages;
+let nswApi, transform;
 let nswEnabled = false;
 try {
   // Soft-enable NSW if any acceptable env var combination is set. nsw-api.js
@@ -37,7 +37,6 @@ try {
   if (hasBasic || (hasKey && hasSecret)) {
     nswApi = require('./nsw-api');
     transform = require('./transform');
-    nswOutages = require('./nsw-outages'); // additive per-fuel outage detection
     nswEnabled = true;
   } else {
     console.warn('[combined-proxy] NSW disabled — set NSW_APIKEY + NSW_APISECRET (or NSW_API_KEY + NSW_API_SECRET, or NSW_AUTH) on this service');
@@ -119,9 +118,6 @@ async function nswRefreshFull() {
   nswState.prices.data = converted;
   nswState.prices.updatedAt = Date.now();
 
-  // Full refresh = current complete availability set → feed the outage detector.
-  if (nswOutages) { try { nswOutages.ingestFull(converted); } catch (e) { console.error('[NSW-outage] ingestFull:', e.message); } }
-
   nswState.firstFetchDone = true;
   nswState.lastError = null;
   console.log(`[NSW] Full refresh ok: ${nswState.sites.data.length} sites, ${nswState.prices.data.length} prices`);
@@ -136,7 +132,6 @@ async function nswRefreshDelta() {
     for (const p of converted) nswState.prices.byKey.set(`${p.SiteId}_${p.FuelId}`, p);
     nswState.prices.data = Array.from(nswState.prices.byKey.values());
     nswState.prices.updatedAt = Date.now();
-    if (nswOutages) { try { nswOutages.ingestDelta(converted); } catch (e) { console.error('[NSW-outage] ingestDelta:', e.message); } }
     nswState.lastError = null;
     console.log(`[NSW] Delta ok: +${converted.length}, total ${nswState.prices.data.length}`);
   } catch (e) {
@@ -164,7 +159,7 @@ app.get('/', (req, res) => {
     endpoints: {
       'legacy QLD (unchanged)': ['/prices', '/sites'],
       'explicit QLD':           ['/qld/prices', '/qld/sites'],
-      'NSW':                    ['/nsw/prices', '/nsw/sites', '/nsw/suburbs', '/nsw/outages', '/nsw/refresh?token=...'],
+      'NSW':                    ['/nsw/prices', '/nsw/sites', '/nsw/suburbs', '/nsw/refresh?token=...'],
       combined:                 ['/all/prices'],
       other:                    ['/mapkit-token', '/health'],
     },
@@ -245,17 +240,6 @@ app.get('/nsw/sites', (req, res) => {
 app.get('/nsw/suburbs', (req, res) => {
   if (require503IfNotReady(res)) return;
   res.json(nswState.suburbs.data);
-});
-
-app.get('/nsw/outages', (req, res) => {
-  if (require503IfNotReady(res)) return;
-  if (!nswOutages) return res.status(503).json({ error: 'NSW outage detection unavailable' });
-  try {
-    res.json(nswOutages.compute());
-  } catch (e) {
-    console.error('[NSW-outage] compute:', e.message);
-    res.status(500).json({ error: e.message });
-  }
 });
 
 app.get('/nsw/refresh', async (req, res) => {
