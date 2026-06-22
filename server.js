@@ -30,6 +30,12 @@ if (!vicEnabled) {
   console.warn('[combined-proxy] VIC disabled — set VIC_CONSUMER_ID on this service');
 }
 
+const sa = require('./sa'); // SA SAFPIS self-caches; soft-enabled by SA_SUBSCRIBER_TOKEN env
+const saEnabled = sa.isEnabled();
+if (!saEnabled) {
+  console.warn('[combined-proxy] SA disabled — set SA_SUBSCRIBER_TOKEN on this service');
+}
+
 // NSW modules — wrap in try so missing env vars don't kill the whole service
 let nswApi, transform;
 let nswEnabled = false;
@@ -166,6 +172,7 @@ app.get('/', (req, res) => {
       'explicit QLD':           ['/qld/prices', '/qld/sites'],
       'NSW':                    ['/nsw/prices', '/nsw/sites', '/nsw/suburbs', '/nsw/refresh?token=...'],
       'VIC':                    ['/vic/prices', '/vic/sites', '/vic/refresh?token=...'],
+      'SA':                     ['/sa/prices', '/sa/sites'],
       combined:                 ['/all/prices'],
       other:                    ['/mapkit-token', '/health'],
     },
@@ -178,6 +185,7 @@ app.get('/', (req, res) => {
       lastError: nswState.lastError,
     },
     vic: vic.state(),
+    sa: sa.state(),
   });
 });
 
@@ -300,10 +308,35 @@ app.get('/vic/refresh', async (req, res) => {
   }
 });
 
+// ─── SA endpoints (SAFPIS, ~30 min fresh) ────────────────────────────
+// sa.js self-caches, so these read through it. Same shapes as NSW/VIC.
+app.get('/sa/sites', async (req, res) => {
+  if (!saEnabled) return res.status(503).json({ error: 'SA disabled — set SA_SUBSCRIBER_TOKEN env var' });
+  try {
+    res.json(await sa.getSites());
+  } catch (e) {
+    console.error('[SA] sites failed:', e.message);
+    res.status(502).json({ error: 'SA sites fetch failed', details: e.message });
+  }
+});
+
+app.get('/sa/prices', async (req, res) => {
+  if (!saEnabled) return res.status(503).json({ error: 'SA disabled — set SA_SUBSCRIBER_TOKEN env var' });
+  try {
+    res.json(await sa.getPrices());
+  } catch (e) {
+    console.error('[SA] prices failed:', e.message);
+    res.status(502).json({ error: 'SA prices fetch failed', details: e.message });
+  }
+});
+
 // ─── Combined endpoint — one HTTP call, all states ───────────────────
 // Saves the page-costco-fuel-prices.php + dashboard a parallel fetch.
 app.get('/all/prices', async (req, res) => {
-  const out = { qld: null, nsw: null, vic: null, qldError: null, nswError: null, vicError: null };
+  const out = {
+    qld: null, nsw: null, vic: null, sa: null,
+    qldError: null, nswError: null, vicError: null, saError: null,
+  };
   try {
     out.qld = await qld.getPrices();
   } catch (e) {
@@ -324,6 +357,15 @@ app.get('/all/prices', async (req, res) => {
     }
   } else {
     out.vicError = 'VIC disabled';
+  }
+  if (saEnabled) {
+    try {
+      out.sa = await sa.getPrices();
+    } catch (e) {
+      out.saError = e.message;
+    }
+  } else {
+    out.saError = 'SA disabled';
   }
   res.json(out);
 });
