@@ -39,6 +39,9 @@ if (!saEnabled) {
 const wa = require('./wa'); // WA FuelWatch RSS — no key, always enabled, self-caches daily
 const waEnabled = wa.isEnabled();
 
+const nt = require('./nt'); // NT MyFuelNT scrape — no key, always enabled, self-caches 15 min
+const ntEnabled = nt.isEnabled();
+
 // NSW modules — wrap in try so missing env vars don't kill the whole service
 let nswApi, transform;
 let nswEnabled = false;
@@ -177,6 +180,7 @@ app.get('/', (req, res) => {
       'VIC':                    ['/vic/prices', '/vic/sites', '/vic/refresh?token=...'],
       'SA':                     ['/sa/prices', '/sa/sites'],
       'WA':                     ['/wa/prices', '/wa/sites', '/wa/refresh?token=...'],
+      'NT':                     ['/nt/prices', '/nt/sites', '/nt/refresh?token=...'],
       combined:                 ['/all/prices'],
       other:                    ['/mapkit-token', '/health'],
     },
@@ -191,6 +195,7 @@ app.get('/', (req, res) => {
     vic: vic.state(),
     sa: sa.state(),
     wa: wa.state(),
+    nt: nt.state(),
   });
 });
 
@@ -367,12 +372,44 @@ app.get('/wa/refresh', async (req, res) => {
   }
 });
 
+// ─── NT endpoints (MyFuelNT scrape, real-time, no key) ───────────────
+app.get('/nt/sites', async (req, res) => {
+  try {
+    res.json(await nt.getSites());
+  } catch (e) {
+    console.error('[NT] sites failed:', e.message);
+    res.status(502).json({ error: 'NT sites fetch failed', details: e.message });
+  }
+});
+
+app.get('/nt/prices', async (req, res) => {
+  try {
+    res.json(await nt.getPrices());
+  } catch (e) {
+    console.error('[NT] prices failed:', e.message);
+    res.status(502).json({ error: 'NT prices fetch failed', details: e.message });
+  }
+});
+
+app.get('/nt/refresh', async (req, res) => {
+  const token = req.query.token;
+  if (!process.env.REFRESH_TOKEN || token !== process.env.REFRESH_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const c = await nt.refresh();
+    res.json({ ok: true, sites: c.sites.length, prices: c.prices.SitePrices.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Combined endpoint — one HTTP call, all states ───────────────────
 // Saves the page-costco-fuel-prices.php + dashboard a parallel fetch.
 app.get('/all/prices', async (req, res) => {
   const out = {
-    qld: null, nsw: null, vic: null, sa: null, wa: null,
-    qldError: null, nswError: null, vicError: null, saError: null, waError: null,
+    qld: null, nsw: null, vic: null, sa: null, wa: null, nt: null,
+    qldError: null, nswError: null, vicError: null, saError: null, waError: null, ntError: null,
   };
   try {
     out.qld = await qld.getPrices();
@@ -409,6 +446,11 @@ app.get('/all/prices', async (req, res) => {
   } catch (e) {
     out.waError = e.message;
   }
+  try {
+    out.nt = await nt.getPrices();
+  } catch (e) {
+    out.ntError = e.message;
+  }
   res.json(out);
 });
 
@@ -443,4 +485,11 @@ app.listen(PORT, () => {
   setInterval(() => {
     wa.refresh().catch(e => console.error('[WA] daily refresh failed:', e.message));
   }, 24 * 60 * 60 * 1000);
+
+  // NT MyFuelNT — no key, always on, real-time feed. Warm on boot + refresh every 15 min.
+  console.log('[combined-proxy] NT enabled (MyFuelNT, no key)');
+  nt.refresh().catch(e => console.error('[NT] boot refresh failed:', e.message));
+  setInterval(() => {
+    nt.refresh().catch(e => console.error('[NT] 15-min refresh failed:', e.message));
+  }, 15 * 60 * 1000);
 });
