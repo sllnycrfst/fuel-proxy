@@ -36,6 +36,9 @@ if (!saEnabled) {
   console.warn('[combined-proxy] SA disabled — set SA_SUBSCRIBER_TOKEN on this service');
 }
 
+const wa = require('./wa'); // WA FuelWatch RSS — no key, always enabled, self-caches daily
+const waEnabled = wa.isEnabled();
+
 // NSW modules — wrap in try so missing env vars don't kill the whole service
 let nswApi, transform;
 let nswEnabled = false;
@@ -173,6 +176,7 @@ app.get('/', (req, res) => {
       'NSW':                    ['/nsw/prices', '/nsw/sites', '/nsw/suburbs', '/nsw/refresh?token=...'],
       'VIC':                    ['/vic/prices', '/vic/sites', '/vic/refresh?token=...'],
       'SA':                     ['/sa/prices', '/sa/sites'],
+      'WA':                     ['/wa/prices', '/wa/sites', '/wa/refresh?token=...'],
       combined:                 ['/all/prices'],
       other:                    ['/mapkit-token', '/health'],
     },
@@ -186,6 +190,7 @@ app.get('/', (req, res) => {
     },
     vic: vic.state(),
     sa: sa.state(),
+    wa: wa.state(),
   });
 });
 
@@ -330,12 +335,44 @@ app.get('/sa/prices', async (req, res) => {
   }
 });
 
+// ─── WA endpoints (FuelWatch RSS, daily 24h-rule prices, no key) ──────
+app.get('/wa/sites', async (req, res) => {
+  try {
+    res.json(await wa.getSites());
+  } catch (e) {
+    console.error('[WA] sites failed:', e.message);
+    res.status(502).json({ error: 'WA sites fetch failed', details: e.message });
+  }
+});
+
+app.get('/wa/prices', async (req, res) => {
+  try {
+    res.json(await wa.getPrices());
+  } catch (e) {
+    console.error('[WA] prices failed:', e.message);
+    res.status(502).json({ error: 'WA prices fetch failed', details: e.message });
+  }
+});
+
+app.get('/wa/refresh', async (req, res) => {
+  const token = req.query.token;
+  if (!process.env.REFRESH_TOKEN || token !== process.env.REFRESH_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const c = await wa.refresh();
+    res.json({ ok: true, sites: c.sites.length, prices: c.prices.SitePrices.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Combined endpoint — one HTTP call, all states ───────────────────
 // Saves the page-costco-fuel-prices.php + dashboard a parallel fetch.
 app.get('/all/prices', async (req, res) => {
   const out = {
-    qld: null, nsw: null, vic: null, sa: null,
-    qldError: null, nswError: null, vicError: null, saError: null,
+    qld: null, nsw: null, vic: null, sa: null, wa: null,
+    qldError: null, nswError: null, vicError: null, saError: null, waError: null,
   };
   try {
     out.qld = await qld.getPrices();
@@ -367,6 +404,11 @@ app.get('/all/prices', async (req, res) => {
   } else {
     out.saError = 'SA disabled';
   }
+  try {
+    out.wa = await wa.getPrices();
+  } catch (e) {
+    out.waError = e.message;
+  }
   res.json(out);
 });
 
@@ -394,4 +436,11 @@ app.listen(PORT, () => {
       vic.refresh().catch(e => console.error('[VIC] daily refresh failed:', e.message));
     }, 24 * 60 * 60 * 1000);
   }
+
+  // WA FuelWatch — no key, always on. Warm on boot + daily refresh (24h rule).
+  console.log('[combined-proxy] WA enabled (FuelWatch, no key)');
+  wa.refresh().catch(e => console.error('[WA] boot refresh failed:', e.message));
+  setInterval(() => {
+    wa.refresh().catch(e => console.error('[WA] daily refresh failed:', e.message));
+  }, 24 * 60 * 60 * 1000);
 });
