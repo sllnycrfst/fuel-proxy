@@ -42,6 +42,9 @@ const waEnabled = wa.isEnabled();
 const nt = require('./nt'); // NT MyFuelNT scrape — no key, always enabled, self-caches 15 min
 const ntEnabled = nt.isEnabled();
 
+const tas = require('./tas'); // TAS FuelCheck keyless AJAX — no key, always enabled, self-caches 15 min
+const tasEnabled = tas.isEnabled();
+
 // NSW modules — wrap in try so missing env vars don't kill the whole service
 let nswApi, transform;
 let nswEnabled = false;
@@ -181,6 +184,7 @@ app.get('/', (req, res) => {
       'SA':                     ['/sa/prices', '/sa/sites'],
       'WA':                     ['/wa/prices', '/wa/sites', '/wa/refresh?token=...'],
       'NT':                     ['/nt/prices', '/nt/sites', '/nt/refresh?token=...'],
+      'TAS':                    ['/tas/prices', '/tas/sites', '/tas/refresh?token=...'],
       combined:                 ['/all/prices'],
       other:                    ['/mapkit-token', '/health'],
     },
@@ -196,6 +200,7 @@ app.get('/', (req, res) => {
     sa: sa.state(),
     wa: wa.state(),
     nt: nt.state(),
+    tas: tas.state(),
   });
 });
 
@@ -404,12 +409,44 @@ app.get('/nt/refresh', async (req, res) => {
   }
 });
 
+// ─── TAS endpoints (FuelCheck TAS keyless AJAX, real-time, no key) ────
+app.get('/tas/sites', async (req, res) => {
+  try {
+    res.json(await tas.getSites());
+  } catch (e) {
+    console.error('[TAS] sites failed:', e.message);
+    res.status(502).json({ error: 'TAS sites fetch failed', details: e.message });
+  }
+});
+
+app.get('/tas/prices', async (req, res) => {
+  try {
+    res.json(await tas.getPrices());
+  } catch (e) {
+    console.error('[TAS] prices failed:', e.message);
+    res.status(502).json({ error: 'TAS prices fetch failed', details: e.message });
+  }
+});
+
+app.get('/tas/refresh', async (req, res) => {
+  const token = req.query.token;
+  if (!process.env.REFRESH_TOKEN || token !== process.env.REFRESH_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const c = await tas.refresh();
+    res.json({ ok: true, sites: c.sites.length, prices: c.prices.SitePrices.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Combined endpoint — one HTTP call, all states ───────────────────
 // Saves the page-costco-fuel-prices.php + dashboard a parallel fetch.
 app.get('/all/prices', async (req, res) => {
   const out = {
-    qld: null, nsw: null, vic: null, sa: null, wa: null, nt: null,
-    qldError: null, nswError: null, vicError: null, saError: null, waError: null, ntError: null,
+    qld: null, nsw: null, vic: null, sa: null, wa: null, nt: null, tas: null,
+    qldError: null, nswError: null, vicError: null, saError: null, waError: null, ntError: null, tasError: null,
   };
   try {
     out.qld = await qld.getPrices();
@@ -451,6 +488,11 @@ app.get('/all/prices', async (req, res) => {
   } catch (e) {
     out.ntError = e.message;
   }
+  try {
+    out.tas = await tas.getPrices();
+  } catch (e) {
+    out.tasError = e.message;
+  }
   res.json(out);
 });
 
@@ -491,5 +533,12 @@ app.listen(PORT, () => {
   nt.refresh().catch(e => console.error('[NT] boot refresh failed:', e.message));
   setInterval(() => {
     nt.refresh().catch(e => console.error('[NT] 15-min refresh failed:', e.message));
+  }, 15 * 60 * 1000);
+
+  // TAS FuelCheck — no key, always on, real-time feed. Warm on boot + refresh every 15 min.
+  console.log('[combined-proxy] TAS enabled (FuelCheck TAS, no key)');
+  tas.refresh().catch(e => console.error('[TAS] boot refresh failed:', e.message));
+  setInterval(() => {
+    tas.refresh().catch(e => console.error('[TAS] 15-min refresh failed:', e.message));
   }, 15 * 60 * 1000);
 });
