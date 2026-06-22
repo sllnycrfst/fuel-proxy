@@ -24,6 +24,11 @@ const express = require('express');
 const cors = require('cors');
 
 const qld = require('./qld');
+const vic = require('./vic'); // VIC self-caches; soft-enabled by VIC_CONSUMER_ID env
+const vicEnabled = vic.isEnabled();
+if (!vicEnabled) {
+  console.warn('[combined-proxy] VIC disabled — set VIC_CONSUMER_ID on this service');
+}
 
 // NSW modules — wrap in try so missing env vars don't kill the whole service
 let nswApi, transform;
@@ -160,6 +165,7 @@ app.get('/', (req, res) => {
       'legacy QLD (unchanged)': ['/prices', '/sites'],
       'explicit QLD':           ['/qld/prices', '/qld/sites'],
       'NSW':                    ['/nsw/prices', '/nsw/sites', '/nsw/suburbs', '/nsw/refresh?token=...'],
+      'VIC':                    ['/vic/prices', '/vic/sites', '/vic/refresh?token=...'],
       combined:                 ['/all/prices'],
       other:                    ['/mapkit-token', '/health'],
     },
@@ -171,6 +177,7 @@ app.get('/', (req, res) => {
       pricesUpdated: nswState.prices.updatedAt ? new Date(nswState.prices.updatedAt).toISOString() : null,
       lastError: nswState.lastError,
     },
+    vic: vic.state(),
   });
 });
 
@@ -256,10 +263,47 @@ app.get('/nsw/refresh', async (req, res) => {
   }
 });
 
-// ─── Combined endpoint — one HTTP call, both states ──────────────────
+// ─── VIC endpoints (Service Victoria Fair Fuel Open Data, ~24h delayed) ──
+// vic.js self-caches for 24h, so these just read through it. Returns the
+// same shapes as NSW: a sites array + a { SitePrices } object.
+app.get('/vic/sites', async (req, res) => {
+  if (!vicEnabled) return res.status(503).json({ error: 'VIC disabled — set VIC_CONSUMER_ID env var' });
+  try {
+    res.json(await vic.getSites());
+  } catch (e) {
+    console.error('[VIC] sites failed:', e.message);
+    res.status(502).json({ error: 'VIC sites fetch failed', details: e.message });
+  }
+});
+
+app.get('/vic/prices', async (req, res) => {
+  if (!vicEnabled) return res.status(503).json({ error: 'VIC disabled — set VIC_CONSUMER_ID env var' });
+  try {
+    res.json(await vic.getPrices());
+  } catch (e) {
+    console.error('[VIC] prices failed:', e.message);
+    res.status(502).json({ error: 'VIC prices fetch failed', details: e.message });
+  }
+});
+
+app.get('/vic/refresh', async (req, res) => {
+  if (!vicEnabled) return res.status(503).json({ error: 'VIC disabled' });
+  const token = req.query.token;
+  if (!process.env.REFRESH_TOKEN || token !== process.env.REFRESH_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const c = await vic.refresh();
+    res.json({ ok: true, sites: c.sites.length, prices: c.prices.SitePrices.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Combined endpoint — one HTTP call, all states ───────────────────
 // Saves the page-costco-fuel-prices.php + dashboard a parallel fetch.
 app.get('/all/prices', async (req, res) => {
-  const out = { qld: null, nsw: null, qldError: null, nswError: null };
+  const out = { qld: null, nsw: null, vic: null, qldError: null, nswError: null, vicError: null };
   try {
     out.qld = await qld.getPrices();
   } catch (e) {
@@ -271,6 +315,15 @@ app.get('/all/prices', async (req, res) => {
     out.nswError = 'NSW cache warming up';
   } else {
     out.nswError = 'NSW disabled';
+  }
+  if (vicEnabled) {
+    try {
+      out.vic = await vic.getPrices();
+    } catch (e) {
+      out.vicError = e.message;
+    }
+  } else {
+    out.vicError = 'VIC disabled';
   }
   res.json(out);
 });
@@ -288,6 +341,15 @@ app.listen(PORT, () => {
     // Full refresh once a day (resync station list + safety net)
     setInterval(() => {
       nswRefreshFull().catch(e => console.error('[NSW] daily full failed:', e.message));
+    }, 24 * 60 * 60 * 1000);
+  }
+
+  console.log(`[combined-proxy] VIC ${vicEnabled ? 'enabled' : 'disabled'}`);
+  if (vicEnabled) {
+    // Warm the cache on boot, then self-refresh daily (the feed updates once/day).
+    vic.refresh().catch(e => console.error('[VIC] boot refresh failed:', e.message));
+    setInterval(() => {
+      vic.refresh().catch(e => console.error('[VIC] daily refresh failed:', e.message));
     }, 24 * 60 * 60 * 1000);
   }
 });

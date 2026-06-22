@@ -1,7 +1,7 @@
 {
   "name": "fuel-proxy",
   "version": "2.0.0",
-  "description": "Fuel Daddy combined QLD + NSW + ACT fuel price proxy. Serves QLD on the legacy /prices /sites routes plus explicit per-state and combined routes.",
+  "description": "Fuel Daddy combined QLD + NSW + ACT + VIC fuel price proxy. Serves QLD on the legacy /prices /sites routes plus explicit per-state and combined routes.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
