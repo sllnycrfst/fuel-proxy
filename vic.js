@@ -154,9 +154,26 @@ function build(pricesPayload, brandsPayload) {
     });
 
     for (const p of rec.fuelPrices || []) {
-      if (!p.isAvailable) continue;
       const fid = FUEL_TO_QLD_ID[p.fuelType];
-      if (fid == null || p.price == null) continue;
+      if (fid == null) continue;
+      // Out of stock: the VIC feed explicitly flags unavailable fuels
+      // (isAvailable:false, price:null). Emit a QLD-style placeholder (>900 c/L)
+      // so the existing outage detection (page-fuel-outages.php +
+      // fd-live-snapshot.php, both treat Price > 8000 as "out") picks it up with
+      // NO website change. When the station restocks isAvailable flips true and
+      // the sentinel disappears on the next daily refresh. updatedAt is the
+      // feed's batch date (~1 day old), so it passes the 7-day freshness gate.
+      if (p.isAvailable === false) {
+        SitePrices.push({
+          SiteId: sid,
+          FuelId: fid,
+          Price: 99999,                                // 9999.9 c/L sentinel = out of fuel
+          TransactionDateUtc: p.updatedAt || null,
+          CollectionMethod: 'V',
+        });
+        continue;
+      }
+      if (p.price == null) continue;
       SitePrices.push({
         SiteId: sid,
         FuelId: fid,
