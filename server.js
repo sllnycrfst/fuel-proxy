@@ -324,6 +324,13 @@ app.get('/vic/refresh', async (req, res) => {
 });
 
 // ─── SA endpoints (SAFPIS, ~30 min fresh) ────────────────────────────
+// TEMP debug — remove after fixing SA suburb/brand mapping.
+app.get('/sa/debug', async (req, res) => {
+  if (!saEnabled) return res.status(503).json({ error: 'SA disabled' });
+  try { res.json(await sa.debugRaw()); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 // sa.js self-caches, so these read through it. Same shapes as NSW/VIC.
 app.get('/sa/sites', async (req, res) => {
   if (!saEnabled) return res.status(503).json({ error: 'SA disabled — set SA_SUBSCRIBER_TOKEN env var' });

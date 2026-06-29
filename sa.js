@@ -167,4 +167,28 @@ function state() {
   };
 }
 
-module.exports = { isEnabled, getSites, getPrices, state };
+// ── TEMP debug probe: reveals raw response shapes to fix field mapping.
+// Returns sample keys + first object only (public fuel metadata, no token).
+async function debugRaw() {
+  const out = {};
+  try {
+    const brands = await saGet(`/Subscriber/GetCountryBrands?countryId=${COUNTRY}`);
+    const barr = Array.isArray(brands) ? brands : (brands && (brands.Brands || brands.BrandList || Object.values(brands).find(Array.isArray))) || [];
+    out.brands = { topType: Array.isArray(brands) ? 'array' : typeof brands, topKeys: Array.isArray(brands) ? null : Object.keys(brands || {}), count: barr.length, sample: barr[0] || null };
+  } catch (e) { out.brands = { error: e.message }; }
+  try {
+    const regions = await saGet(`/Subscriber/GetCountryGeographicRegions?countryId=${COUNTRY}`);
+    const rarr = Array.isArray(regions) ? regions : (regions && (regions.GeographicRegions || regions.Regions || Object.values(regions).find(Array.isArray))) || [];
+    const levels = {};
+    for (const r of rarr) { const lv = r && (r.GeoRegionLevel ?? r.GeographicRegionLevel ?? r.Level); levels[lv] = (levels[lv] || 0) + 1; }
+    out.regions = { topType: Array.isArray(regions) ? 'array' : typeof regions, topKeys: Array.isArray(regions) ? null : Object.keys(regions || {}), count: rarr.length, levelCounts: levels, sample: rarr[0] || null };
+  } catch (e) { out.regions = { error: e.message }; }
+  try {
+    const raw = await saGet(`/Subscriber/GetFullSiteDetails?countryId=${COUNTRY}&geoRegionLevel=${SA_LEVEL}&geoRegionId=${SA_REGION}`);
+    const list = Array.isArray(raw) ? raw : (raw.S || []);
+    out.sites = { topType: Array.isArray(raw) ? 'array' : typeof raw, topKeys: Array.isArray(raw) ? null : Object.keys(raw || {}), count: list.length, sampleKeys: list[0] ? Object.keys(list[0]) : null, sample: list[0] || null };
+  } catch (e) { out.sites = { error: e.message }; }
+  return out;
+}
+
+module.exports = { isEnabled, getSites, getPrices, state, debugRaw };
