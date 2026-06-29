@@ -139,7 +139,13 @@ async function getPrices() {
     const raw = await saGet(`/Price/GetSitesPrices?countryId=${COUNTRY}&geoRegionLevel=${SA_LEVEL}&geoRegionId=${SA_REGION}`);
     const SitePrices = [];
     for (const p of (raw && raw.SitePrices) || []) {
-      if (p.Price == null || p.Price >= 9999) continue; // 9999 = unavailable
+      if (p.Price == null) continue;
+      // SAFPIS marks an unavailable fuel with Price 9999 (= 999.9 c/L), same
+      // as QLD's Informed-Sources feed. Pass it THROUGH as a >=9000-tenths
+      // sentinel so the outage page / snapshot can count SA out-of-stock
+      // fuels. Real-price consumers (map, trends, cheapest) already exclude
+      // >=9000 tenths / >=900 c, so this is safe. (2026-06-29: was skipped,
+      // which left SA with no outage signal.)
       SitePrices.push({
         SiteId: 'SA_' + p.SiteId,
         FuelId: p.FuelId,
