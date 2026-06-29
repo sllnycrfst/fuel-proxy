@@ -184,10 +184,30 @@ async function debugRaw() {
     out.regions = { topType: Array.isArray(regions) ? 'array' : typeof regions, topKeys: Array.isArray(regions) ? null : Object.keys(regions || {}), count: rarr.length, levelCounts: levels, sample: rarr[0] || null };
   } catch (e) { out.regions = { error: e.message }; }
   try {
+    const regions = await saGet(`/Subscriber/GetCountryGeographicRegions?countryId=${COUNTRY}`);
+    const rarr = (regions && (regions.GeographicRegions || regions.Regions)) || (Array.isArray(regions) ? regions : []);
+    const byId = {};            // GeoRegionId -> {name, level}
+    const lvl1 = new Set(), lvl2 = new Set(), lvl3 = new Set();
+    for (const r of rarr) {
+      byId[String(r.GeoRegionId)] = { n: r.Name, lv: r.GeoRegionLevel };
+      if (r.GeoRegionLevel === 1) lvl1.add(String(r.GeoRegionId));
+      if (r.GeoRegionLevel === 2) lvl2.add(String(r.GeoRegionId));
+      if (r.GeoRegionLevel === 3) lvl3.add(String(r.GeoRegionId));
+    }
     const raw = await saGet(`/Subscriber/GetFullSiteDetails?countryId=${COUNTRY}&geoRegionLevel=${SA_LEVEL}&geoRegionId=${SA_REGION}`);
     const list = Array.isArray(raw) ? raw : (raw.S || []);
-    out.sites = { topType: Array.isArray(raw) ? 'array' : typeof raw, topKeys: Array.isArray(raw) ? null : Object.keys(raw || {}), count: list.length, sampleKeys: list[0] ? Object.keys(list[0]) : null, sample: list[0] || null };
-  } catch (e) { out.sites = { error: e.message }; }
+    let g1in1=0,g1in2=0,g2in1=0,g2in2=0,g3in3=0;
+    const samples = [];
+    for (const s of list) {
+      if (lvl1.has(String(s.G1))) g1in1++;
+      if (lvl2.has(String(s.G1))) g1in2++;
+      if (lvl1.has(String(s.G2))) g2in1++;
+      if (lvl2.has(String(s.G2))) g2in2++;
+      if (lvl3.has(String(s.G3))) g3in3++;
+      if (samples.length < 5) samples.push({ N:s.N, G1:s.G1, G2:s.G2, G3:s.G3, G1name:(byId[String(s.G1)]||{}).n, G2name:(byId[String(s.G2)]||{}).n, G3name:(byId[String(s.G3)]||{}).n });
+    }
+    out.join = { siteCount:list.length, g1in1, g1in2, g2in1, g2in2, g3in3, samples };
+  } catch (e) { out.join = { error: e.message, stack: (e.stack||'').slice(0,300) }; }
   return out;
 }
 
