@@ -74,12 +74,16 @@ async function ensureMeta() {
   const suburbById = {};
   try {
     const brands = await saGet(`/Subscriber/GetCountryBrands?countryId=${COUNTRY}`);
-    for (const b of brands || []) if (b && b.BrandId != null) brandsById[String(b.BrandId)] = b.Name;
+    // SAFPIS wraps the array: { Brands: [ {BrandId, Name}, ... ] }
+    const barr = (brands && brands.Brands) || (Array.isArray(brands) ? brands : []);
+    for (const b of barr) if (b && b.BrandId != null) brandsById[String(b.BrandId)] = b.Name;
   } catch (e) { console.warn('[SA] brands fetch failed (names degrade):', e.message); }
   try {
     const regions = await saGet(`/Subscriber/GetCountryGeographicRegions?countryId=${COUNTRY}`);
-    // level 1 = suburb. site.G1 -> suburb name.
-    for (const r of regions || []) {
+    // SAFPIS wraps the array: { GeographicRegions: [ {GeoRegionLevel, GeoRegionId, Name}, ... ] }
+    // level 1 = suburb. site.G1 -> suburb name (verified: all 724 SA sites' G1 hit a level-1 region).
+    const rarr = (regions && regions.GeographicRegions) || (Array.isArray(regions) ? regions : []);
+    for (const r of rarr) {
       if (r && r.GeoRegionLevel === 1 && r.GeoRegionId != null) suburbById[String(r.GeoRegionId)] = r.Name;
     }
   } catch (e) { console.warn('[SA] regions fetch failed (suburb degrades):', e.message); }
@@ -167,48 +171,4 @@ function state() {
   };
 }
 
-// ── TEMP debug probe: reveals raw response shapes to fix field mapping.
-// Returns sample keys + first object only (public fuel metadata, no token).
-async function debugRaw() {
-  const out = {};
-  try {
-    const brands = await saGet(`/Subscriber/GetCountryBrands?countryId=${COUNTRY}`);
-    const barr = Array.isArray(brands) ? brands : (brands && (brands.Brands || brands.BrandList || Object.values(brands).find(Array.isArray))) || [];
-    out.brands = { topType: Array.isArray(brands) ? 'array' : typeof brands, topKeys: Array.isArray(brands) ? null : Object.keys(brands || {}), count: barr.length, sample: barr[0] || null };
-  } catch (e) { out.brands = { error: e.message }; }
-  try {
-    const regions = await saGet(`/Subscriber/GetCountryGeographicRegions?countryId=${COUNTRY}`);
-    const rarr = Array.isArray(regions) ? regions : (regions && (regions.GeographicRegions || regions.Regions || Object.values(regions).find(Array.isArray))) || [];
-    const levels = {};
-    for (const r of rarr) { const lv = r && (r.GeoRegionLevel ?? r.GeographicRegionLevel ?? r.Level); levels[lv] = (levels[lv] || 0) + 1; }
-    out.regions = { topType: Array.isArray(regions) ? 'array' : typeof regions, topKeys: Array.isArray(regions) ? null : Object.keys(regions || {}), count: rarr.length, levelCounts: levels, sample: rarr[0] || null };
-  } catch (e) { out.regions = { error: e.message }; }
-  try {
-    const regions = await saGet(`/Subscriber/GetCountryGeographicRegions?countryId=${COUNTRY}`);
-    const rarr = (regions && (regions.GeographicRegions || regions.Regions)) || (Array.isArray(regions) ? regions : []);
-    const byId = {};            // GeoRegionId -> {name, level}
-    const lvl1 = new Set(), lvl2 = new Set(), lvl3 = new Set();
-    for (const r of rarr) {
-      byId[String(r.GeoRegionId)] = { n: r.Name, lv: r.GeoRegionLevel };
-      if (r.GeoRegionLevel === 1) lvl1.add(String(r.GeoRegionId));
-      if (r.GeoRegionLevel === 2) lvl2.add(String(r.GeoRegionId));
-      if (r.GeoRegionLevel === 3) lvl3.add(String(r.GeoRegionId));
-    }
-    const raw = await saGet(`/Subscriber/GetFullSiteDetails?countryId=${COUNTRY}&geoRegionLevel=${SA_LEVEL}&geoRegionId=${SA_REGION}`);
-    const list = Array.isArray(raw) ? raw : (raw.S || []);
-    let g1in1=0,g1in2=0,g2in1=0,g2in2=0,g3in3=0;
-    const samples = [];
-    for (const s of list) {
-      if (lvl1.has(String(s.G1))) g1in1++;
-      if (lvl2.has(String(s.G1))) g1in2++;
-      if (lvl1.has(String(s.G2))) g2in1++;
-      if (lvl2.has(String(s.G2))) g2in2++;
-      if (lvl3.has(String(s.G3))) g3in3++;
-      if (samples.length < 5) samples.push({ N:s.N, G1:s.G1, G2:s.G2, G3:s.G3, G1name:(byId[String(s.G1)]||{}).n, G2name:(byId[String(s.G2)]||{}).n, G3name:(byId[String(s.G3)]||{}).n });
-    }
-    out.join = { siteCount:list.length, g1in1, g1in2, g2in1, g2in2, g3in3, samples };
-  } catch (e) { out.join = { error: e.message, stack: (e.stack||'').slice(0,300) }; }
-  return out;
-}
-
-module.exports = { isEnabled, getSites, getPrices, state, debugRaw };
+module.exports = { isEnabled, getSites, getPrices, state };
