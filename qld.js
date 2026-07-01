@@ -13,6 +13,13 @@
 // with backoff + a short-lived last-good cache served on failure.
 
 const fetch = require('node-fetch');
+const https = require('https');
+
+// 2026-07-01 — QLD gov endpoint started chaining a self-signed cert,
+// failing Node's default TLS verification ("self-signed certificate in
+// certificate chain"). Scoped bypass for THIS host only — other fetches
+// (NSW, VIC, etc.) keep full TLS verification.
+const qldAgent = new https.Agent({ rejectUnauthorized: false });
 
 const QLD_BASE = 'https://fppdirectapi-prod.fuelpricesqld.com.au';
 const QLD_PRICES_URL = `${QLD_BASE}/Price/GetSitesPrices?countryId=21&geoRegionLevel=3&geoRegionId=1`;
@@ -39,6 +46,7 @@ async function qldGet(url, attempts = ATTEMPTS) {
       const res = await fetch(url, {
         method: 'GET',
         timeout: FETCH_TIMEOUT_MS,
+        agent: qldAgent,
         headers: {
           'Authorization': `FPDAPI SubscriberToken=${QLD_TOKEN}`,
           'Accept': 'application/json',
